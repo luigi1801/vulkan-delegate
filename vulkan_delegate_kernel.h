@@ -24,40 +24,9 @@ class VulkanKernel : public SimpleDelegateKernelInterface {
     int inputTensorIdx = 0;
     int outputTensorIdx = 0;
     int kernelTensorIdx = 0;
-
-    float* inputData = nullptr;
-    float* kernelData = nullptr;
-    float* outputData = nullptr;
-    int inputSize = 0;
-    int kernelSize = 0;
-    int OutputSize = 0;
   } Conv2D_Node;
   std::vector<Conv2D_Node> DelegatedNodesConv2D;
   std::vector<std::vector<float>> intermediateTensors;
-
-////// Version 3: Graphs with several nodes, even continuos
-//  typedef struct Conv2D_Node {
-//    int inputTensorIdx = 0;
-//    int outputTensorIdx = 0;
-//    int kernelTensorIdx = 0;
-//
-//    float* inputData = nullptr;
-//    float* kernelData = nullptr;
-//    float* outputData = nullptr;
-//    int inputSize = 0;
-//    int kernelSize = 0;
-//    int OutputSize = 0;
-//  } Conv2D_Node;
-//  std::vector<Conv2D_Node> DelegatedNodesConv2D;
-//  std::vector<std::vector<float>> intermediateTensors;
-
-////// Version 2: Graphs with several nodes, not continuous
-//  typedef struct Conv2D_Node {
-//    int inputTensorIdx = 0;
-//    int outputTensorIdx = 0;
-//    int kernelTensorIdx = 0;
-//  } Conv2D_Node;
-//  std::vector<Conv2D_Node> DelegatedNodesConv2D;
 
   const VulkanDelegateOptions options_;
   std::shared_ptr<VulkanPrimitivesFactory> vulkanPrimitivesFact_ = nullptr;

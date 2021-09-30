@@ -41,22 +41,6 @@ TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
     DelegatedNodesConv2D[i].outputTensorIdx = delegated_node->outputs->data[0];    
   }
 
-  ////// Version 3: Graphs with several nodes, even continuos
-  ////// Version 2: Graphs with several nodes, not continuous
-  //DelegatedNodesConv2D.resize(params->nodes_to_replace->size);
-  //for(int i = 0; i<params->nodes_to_replace->size; i++){
-  //  TfLiteNode* delegated_node = nullptr;
-  //  TfLiteRegistration* delegated_node_registration = nullptr;
-  //  TF_LITE_ENSURE_EQ(
-  //    context,
-  //    context->GetNodeAndRegistration(context, params->nodes_to_replace->data[i], &delegated_node,
-  //                                     &delegated_node_registration),
-  //    kTfLiteOk);
-  //  DelegatedNodesConv2D[i].inputTensorIdx = delegated_node->inputs->data[0];
-  //  DelegatedNodesConv2D[i].kernelTensorIdx = delegated_node->inputs->data[1];
-  //  DelegatedNodesConv2D[i].outputTensorIdx = delegated_node->outputs->data[0];    
-  //}
-
   std::cout<<"INITIALIZATION\n";
   Id++;
   std::cout<<"Id: " << Id << "\n";
@@ -99,38 +83,6 @@ TfLiteStatus VulkanKernel::Prepare(TfLiteContext* context, TfLiteNode* node) {
     }
   }
 
-  ////// Version 3: Graphs with several nodes, even continuos
-  //if (1 < DelegatedNodesConv2D.size()){
-  //  intermediateTensors.resize(DelegatedNodesConv2D.size()-1);
-  //  int intTensorId = 0;
-  //  for(auto nodeIt = DelegatedNodesConv2D.begin(); nodeIt<DelegatedNodesConv2D.end()-1;  nodeIt++, intTensorId++){    
-  //    TfLiteTensor& outputTensor = context->tensors[nodeIt->outputTensorIdx];
-  //    int outputSize = outputTensor.dims->data[1];
-  //    intermediateTensors[intTensorId].resize(outputSize*outputSize);
-  //  }
-  //}
-
-  ///// No version
-  //for(auto nodeIt = DelegatedNodesConv2D.begin(); nodeIt<DelegatedNodesConv2D.end();  nodeIt++){    
-  //  TfLiteTensor& inputTensor = context->tensors[nodeIt->inputTensorIdx];
-  //  TfLiteTensor& kernelTensor = context->tensors[nodeIt->kernelTensorIdx];
-  //  TfLiteTensor& outputTensor = context->tensors[nodeIt->outputTensorIdx];
-  //  nodeIt->inputSize = inputTensor.dims->data[1];
-  //  if(DelegatedNodesConv2D.begin() == nodeIt){
-  //    nodeIt->inputData = reinterpret_cast<float*>(inputTensor.data.data);
-  //  } else{
-  //    nodeIt->inputData = (nodeIt-1)->outputData;
-  //  }
-  //  nodeIt->kernelSize = kernelTensor.dims->data[1];
-  //  nodeIt->kernelData = reinterpret_cast<float*>(kernelTensor.data.data);
-  //  nodeIt->OutputSize = outputTensor.dims->data[1];
-  //  if(DelegatedNodesConv2D.end() == (nodeIt+1)){
-  //    nodeIt->outputData = reinterpret_cast<float*>(outputTensor.data.data);
-  //  } else{
-  //    void* outputData_ptr = malloc(outputTensor.bytes);
-  //    nodeIt->outputData = reinterpret_cast<float*>(outputData_ptr);
-  //  }
-  //}
   std::cout<<"\n\nPREPARATION\n";
   std::cout<<"Id: " << Id << "\n";
 
@@ -223,66 +175,7 @@ TfLiteStatus VulkanKernel::Eval(TfLiteContext* context, TfLiteNode* node) {
   std::cout<<inputSize_t<<"\n";
   std::cout<<kernelSize_t<<"\n";
   std::cout<<OutputSize_t<<"\n";
-
-////// Version 3: Graphs with several nodes, even continuos
-  //int intTensorId = 0;
-  //for(auto nodeIt = DelegatedNodesConv2D.begin(); nodeIt<DelegatedNodesConv2D.end();  nodeIt++, intTensorId++){    
-  //  TfLiteTensor& inputTensor = context->tensors[nodeIt->inputTensorIdx];
-  //  TfLiteTensor& kernelTensor = context->tensors[nodeIt->kernelTensorIdx];
-  //  TfLiteTensor& outputTensor = context->tensors[nodeIt->outputTensorIdx];
-  //  float* inputData;
-  //  float* outputData;
-  //  if(nodeIt == DelegatedNodesConv2D.begin()){
-  //    inputData = reinterpret_cast<float*>(inputTensor.data.data);
-  //  }
-  //  else{
-  //    inputData = intermediateTensors[intTensorId-1].data();
-  //  }
-  //  float* kernelData = reinterpret_cast<float*>(kernelTensor.data.data);
-  //  if(nodeIt+1 == DelegatedNodesConv2D.end()){
-  //    outputData = reinterpret_cast<float*>(outputTensor.data.data);
-  //  }else
-  //  {
-  //    outputData = intermediateTensors[intTensorId].data();
-  //  }
-  //  int inputSize = inputTensor.dims->data[1];
-  //  int kernelSize = kernelTensor.dims->data[1];
-  //  int OutputSize = outputTensor.dims->data[1];
-
-  //  VulkanConvolution2D* vulkanConv = (static_cast<VulkanConvolution2D*>(vulkanPrimitive.get()));
-  //  vulkanConv->Init(inputData, inputSize, kernelData, kernelSize, outputData);
-  //  vulkanPrimitive->Process();
-  //}
-
-  ////// Version 2: Graphs with several nodes, not continuous
-  //for(auto nodeIt = DelegatedNodesConv2D.begin(); nodeIt<DelegatedNodesConv2D.end();  nodeIt++, intTensorId++){    
-  //  TfLiteTensor& inputTensor = context->tensors[nodeIt->inputTensorIdx];
-  //  TfLiteTensor& kernelTensor = context->tensors[nodeIt->kernelTensorIdx];
-  //  TfLiteTensor& outputTensor = context->tensors[nodeIt->outputTensorIdx];
-  //  float* inputData = reinterpret_cast<float*>(inputTensor.data.data);
-  //  float* outputData = reinterpret_cast<float*>(outputTensor.data.data);
-  //  float* kernelData = reinterpret_cast<float*>(kernelTensor.data.data);
-  //  int inputSize = inputTensor.dims->data[1];
-  //  int kernelSize = kernelTensor.dims->data[1];
-  //  VulkanConvolution2D* vulkanConv = (static_cast<VulkanConvolution2D*>(vulkanPrimitive.get()));
-  //  vulkanConv->Init(inputData, inputSize, kernelData, kernelSize, outputData);
-  //  vulkanPrimitive->Process();
-  //}
-
-  ////// Code version 1: graph with only 1 node. 
-  //TfLiteTensor& inputTensor_t = context->tensors[3];
-  //TfLiteTensor& kernelTensor_t = context->tensors[2];
-  //TfLiteTensor& outputTensor_t = context->tensors[0];
-  //float* inputData_t = reinterpret_cast<float*>(inputTensor_t.data.data);
-  //float* kernelData_t = reinterpret_cast<float*>(kernelTensor_t.data.data);
-  //float* outputData_t = reinterpret_cast<float*>(outputTensor_t.data.data);
-  //int inputSize_t = inputTensor_t.dims->data[1];
-  //int kernelSize_t = kernelTensor_t.dims->data[1];
-  //int OutputSize_t = outputTensor_t.dims->data[1];
-  //VulkanConvolution2D* vulkanConv = (static_cast<VulkanConvolution2D*>(vulkanPrimitive.get()));
-  //vulkanConv->Init(inputData_t, inputSize, kernelData_t, kernelSize, outputData_t);
-  //vulkanPrimitive->Process();
-
+  
   return kTfLiteOk;
 }
 
