@@ -26,7 +26,8 @@ namespace vulkan {
 
 TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
                                 const TfLiteDelegateParams* params) {
-  vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d, 0);
+
+  VulkanConv2D_Control control = {0};
   DelegatedNodesConv2D.resize(params->nodes_to_replace->size);
   for(int i = 0; i<params->nodes_to_replace->size; i++){
     TfLiteNode* delegated_node = nullptr;
@@ -39,7 +40,12 @@ TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
     DelegatedNodesConv2D[i].inputTensorIdx = delegated_node->inputs->data[0];
     DelegatedNodesConv2D[i].kernelTensorIdx = delegated_node->inputs->data[1];
     DelegatedNodesConv2D[i].outputTensorIdx = delegated_node->outputs->data[0];    
+
+    TfLiteConvParams convParams = *((TfLiteConvParams*)delegated_node->builtin_data);
+    control.Padding = kTfLitePaddingValid == convParams.padding ? 0 : 1;
+    control.stride_h = convParams.stride_height;
   }
+  vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d, control.AllBits);
 
   std::cout<<"INITIALIZATION\n";
   Id++;
@@ -64,6 +70,9 @@ TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
     for(int j = 0; j < delegated_node->outputs->size; j++){
       std::cout << "--->data["<< j << "]: "<<delegated_node->outputs->data[j] << "\n";
     }
+    TfLiteConvParams convParams = *((TfLiteConvParams*)delegated_node->builtin_data);
+    std::cout<<"padding: " << (int)convParams.padding << "\n";
+    std::cout<<"stride_width: " << convParams.stride_width << "\n";
   }
 
   std::cout<<params->input_tensors->size<< "\n";

@@ -5,6 +5,7 @@
 #include "vulkan-primitives/src/vulkan_primitives_factory.h"
 #include "tensorflow/lite/delegates/utils/simple_delegate.h"
 #include "tensorflow/lite/builtin_ops.h"
+#include "tensorflow/lite/builtin_op_data.h"
 
 #include <iostream>
 
