@@ -3,6 +3,7 @@
 #include <numeric>
 #include <iostream>
 #include <iomanip>
+#include <cmath>
 
 //#include "../../vulkan_compute_convolution/src/cross_correlation.cpp"
 
@@ -24,38 +25,35 @@ printArray(const T array, size_t size)
 int main()
 {
 
-    uint32_t kernelSize     { 3 };
-    uint32_t inputSize     { 16 };
+  uint32_t kernelSize     { 3 };
+  uint32_t inputSize     { 16 };
 
 //    uint32_t workgroupSize { 16 }; 
 
-    std::vector<float> kernel(kernelSize*kernelSize,0);
-    kernel[4]=1;  // 3x3
-    //kernel[5]=1;
-    //kernel[12]=1;  //5x5
-    std::vector<float> compute_input(inputSize*inputSize);
-    std::vector<float> output;
-    std::vector<float> inputCopy(inputSize*inputSize);
+  std::vector<float> kernel(kernelSize*kernelSize,0);
+  kernel[4]=1;  // 3x3
+  //kernel[5]=1;
+  //kernel[12]=1;  //5x5
+  std::vector<float> compute_input(inputSize*inputSize);
+  std::vector<float> output;
     
-    std::iota(compute_input.begin(), compute_input.end(), 0);
-    //std::iota(kernel.begin(), kernel.end(), 0);
-    std::memcpy(inputCopy.data()+2, compute_input.data()+2, inputSize*inputSize*sizeof(float)/2);
+  std::iota(compute_input.begin(), compute_input.end(), 0);
+  //std::iota(kernel.begin(), kernel.end(), 0);
 
-    printArray(compute_input, inputSize);
-    printArray(kernel, kernelSize);
-    //printArray(inputCopy, inputSize);
-    //return 0;
-    VulkanPrimitivesFactory vpfact;
-    std::unique_ptr<VulkanPrimitive> vp = vpfact.GetPrimitive(Vulkan_Conv2d, 1);
-    if(nullptr != vp)
-    {
-        VulkanConvolution2D* vc = (static_cast<VulkanConvolution2D*>(vp.get()));
-        vc->Init(compute_input, inputSize, kernel, kernelSize, output);
-        vp->Process();
-        //printArray(output, inputSize-kernelSize+1);
-        printArray(output, inputSize);
-    }
+  printArray(compute_input, inputSize);
+  printArray(kernel, kernelSize);
 
-
+  VulkanPrimitivesFactory vpfact;
+  VulkanConv2D_Control control = {0};
+  control.Padding = 1;
+  control.stride_h = 5;
+  std::unique_ptr<VulkanPrimitive> vp = vpfact.GetPrimitive(Vulkan_Conv2d, control.AllBits);
+  if(nullptr != vp)
+  {
+    VulkanConvolution2D* vc = (static_cast<VulkanConvolution2D*>(vp.get()));
+    vc->Init(compute_input, inputSize, kernel, kernelSize, output);
+    vp->Process();
+    printArray(output, sqrt(output.size()));
+  }
 };
 

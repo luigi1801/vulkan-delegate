@@ -26,7 +26,7 @@ namespace vulkan {
 
 TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
                                 const TfLiteDelegateParams* params) {
-  vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d);
+  vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d, 0);
   DelegatedNodesConv2D.resize(params->nodes_to_replace->size);
   for(int i = 0; i<params->nodes_to_replace->size; i++){
     TfLiteNode* delegated_node = nullptr;
@@ -175,7 +175,7 @@ TfLiteStatus VulkanKernel::Eval(TfLiteContext* context, TfLiteNode* node) {
   std::cout<<inputSize_t<<"\n";
   std::cout<<kernelSize_t<<"\n";
   std::cout<<OutputSize_t<<"\n";
-  
+
   return kTfLiteOk;
 }
 

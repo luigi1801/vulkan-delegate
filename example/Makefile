@@ -1,5 +1,5 @@
 TF_PATH = $(PWD)/../../../../..
-DELEGATE_LIB = $(TF_PATH)/bazel-bin/tensorflow/lite/delegates/tflite-vulkan-delegate/vulkan_delegate.so
+DELEGATE_LIB = $(TF_PATH)/bazel-bin/tensorflow/lite/delegates/vulkan-delegate/vulkan_delegate.so
 
 EXAMPLE_PATH = vulkan_example
 

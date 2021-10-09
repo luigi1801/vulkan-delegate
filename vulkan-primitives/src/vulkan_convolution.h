@@ -35,8 +35,10 @@ class VulkanConvolution2D : public VulkanPrimitive
   };
   std::vector<NewResource> m_newResources;
 
+  uint32_t padding = 0;
   uint32_t paddingTop = 0;
   uint32_t paddingBottom = 0;
+  uint32_t stride = 0;
 
   void createResource(vk::BufferUsageFlags useage, vk::MemoryPropertyFlags memFlags,
                       vk::DeviceSize size);
