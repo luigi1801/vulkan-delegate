@@ -37,7 +37,7 @@ int main()
   //kernel[5]=1;
   //kernel[12]=1;  //5x5
   std::vector<float> compute_input(inputSize*inputSize);
-  MemDims inDim ;
+  MemDims inDim = {1, inputSize, inputSize, 1};
   std::vector<float> output(outputSize*outputSize);
   MemDims outDim = {1, outputSize, outputSize, 1};
     
