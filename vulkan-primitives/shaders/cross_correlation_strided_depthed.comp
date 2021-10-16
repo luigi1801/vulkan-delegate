@@ -1,0 +1,49 @@
+#version 450
+
+layout (constant_id = 0) const uint INPUT_SIZE = 3;
+layout (constant_id = 1) const uint KERNEL_SIZE = 3;
+layout (constant_id = 2) const uint OUTPUT_SIZE = 3;
+layout (constant_id = 3) const uint WORKGROUP_SIZE = 1;
+layout (constant_id = 4) const uint STRIDE = 1;
+layout (constant_id = 5) const uint INPUT_DEPTH = 1;
+
+layout(binding = 0) buffer Inp {
+  float input_data[ ];
+};
+
+layout(binding = 1) buffer k {
+  float kernel[ ];
+};
+
+layout(binding = 2) buffer Outp {
+  float output_data[ ];
+};
+
+//https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_gl_spirv.txt
+// in gl_NumWorkGroups
+// in gl_WorkGroupSize
+// in gl_WorkGroupID
+// in gl_LocalInvocationID
+// in gl_GlobalInvocationID
+// in gl_LocalInvocationIndex
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x_id = 3) in;
+layout (local_size_y_id = 3) in;
+
+void main() {
+  // return when out of bounds (i.e. the workgroup size does not fit the output size)
+  if (gl_GlobalInvocationID.x >= OUTPUT_SIZE || gl_GlobalInvocationID.y >= OUTPUT_SIZE)
+    return;
+
+  float sum = 0;
+  for (int y=0; y<KERNEL_SIZE; ++y) {
+    for (int x=0; x<KERNEL_SIZE; ++x) {
+      for (int z=0; z<INPUT_DEPTH; ++z) {
+        sum += kernel[(y*KERNEL_SIZE + x)*INPUT_DEPTH  + z]
+          * input_data[((gl_GlobalInvocationID.y*STRIDE + y) * INPUT_SIZE +   gl_GlobalInvocationID.x*STRIDE + x)*INPUT_DEPTH + z];
+      }
+    }
+  }
+  output_data[gl_GlobalInvocationID.y*OUTPUT_SIZE + gl_GlobalInvocationID.x] = sum;
+}

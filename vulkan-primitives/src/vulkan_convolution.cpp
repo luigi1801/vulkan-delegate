@@ -81,7 +81,8 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
       {vk::PipelineLayoutCreateFlags(), 1, &*m_descriptorSetLayout});
 
   // Load shader
-  m_shaderModule = loadShader("shaders/cross_correlation_strided.comp.spv");
+  //m_shaderModule = loadShader("shaders/cross_correlation_strided.comp.spv");
+  m_shaderModule = loadShader("shaders/cross_correlation_strided_depthed.comp.spv");
 
   //Create Descriptor Sets
   m_descriptorSet = p_device->allocateDescriptorSets(
@@ -93,6 +94,16 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
 VulkanConvolution2D::~VulkanConvolution2D()
 {
   std::cout<<"Destroy Vulkan Convolution"<<std::endl;
+}
+
+void VulkanConvolution2D::Init(std::vector<float*> inputs, 
+                               std::vector<MemDims> inputsDims, 
+                               std::vector<float*> weights, 
+                               std::vector<MemDims> weightsDims,
+                               std::vector<float*> outputs, 
+                               std::vector<MemDims> outputsDims){
+  inputDepth = weightsDims[0].Depth;
+  Init(inputs[0], inputsDims[0].Height, weights[0], weightsDims[0].Height, outputs[0]);  
 }
 
 void VulkanConvolution2D::Init()
@@ -107,7 +118,6 @@ void VulkanConvolution2D::Init(std::vector<float>& input, uint32_t inputSize,
   uint32_t inputSizeTmp = inputSize;
   ComputeRealSizes(inputSizeTmp, kernelSize);
 
-  //uint32_t computedOutputSize = ComputeOutputSize(inputSize, kernelSize);
   output.resize(outputSize*outputSize);
   Init(input.data(), inputSize, kernel.data(), kernelSize, output.data());
 }
@@ -117,12 +127,13 @@ void VulkanConvolution2D::Init(float* input, uint32_t inputSize,
                                 float* output)
 {
   std::cout<<"Initializing Vulkan Convolution"<<std::endl;
+  std::cout<<"Depth: "<<inputDepth <<std::endl;
   ComputeRealSizes(inputSize, kernelSize);
   m_output = output;
 
-  workGroupSize = 16;
+  workGroupSize = 4;
   // Pass SSBO size via specialization constant
-  struct SpecializationData {
+  /*struct SpecializationData {
     uint32_t inputSize;
     uint32_t kernelSize;
     uint32_t outputSize;
@@ -144,7 +155,35 @@ void VulkanConvolution2D::Init(float* input, uint32_t inputSize,
 
   const SpecializationData specializationData{inputSize, kernelSize, outputSize,
                                               workGroupSize, stride};
+  */
+  
+  struct SpecializationData {
+    uint32_t inputSize;
+    uint32_t kernelSize;
+    uint32_t outputSize;
+    uint32_t workGroupSize;
+    uint32_t stride;
+    uint32_t inputDepth;
+  };
 
+  const std::array<vk::SpecializationMapEntry, 6> specializationMapEntries{
+      {{0, offsetof(SpecializationData, inputSize),   
+        sizeof(SpecializationData::inputSize)},
+       {1, offsetof(SpecializationData, kernelSize),   
+        sizeof(SpecializationData::kernelSize)},
+       {2, offsetof(SpecializationData, outputSize),   
+        sizeof(SpecializationData::outputSize)},
+       {3, offsetof(SpecializationData, workGroupSize),
+        sizeof(SpecializationData::workGroupSize)},
+       {4, offsetof(SpecializationData, stride),
+        sizeof(SpecializationData::stride)},
+       {5, offsetof(SpecializationData, inputDepth),   
+        sizeof(SpecializationData::inputDepth)}}};
+
+  const SpecializationData specializationData{inputSize, kernelSize, outputSize,
+                                              workGroupSize, stride, inputDepth};
+  
+  
   const vk::SpecializationInfo specializationInfo{
       static_cast<uint32_t>(specializationMapEntries.size()),
       specializationMapEntries.data(), sizeof(SpecializationData),
@@ -165,15 +204,15 @@ void VulkanConvolution2D::Init(float* input, uint32_t inputSize,
 
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 inputSize*inputSize*sizeof(float));
+                 inputSize*inputSize*inputDepth*sizeof(float));
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 kernelSize*kernelSize*sizeof(float));
+                 kernelSize*kernelSize*inputDepth*sizeof(float));
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
                  outputSize*outputSize*sizeof(float));
 
-  vku::copyToDeviceMemory(*p_device, kernel, kernelSize*kernelSize, m_newResources[1].memory);
+  vku::copyToDeviceMemory(*p_device, kernel, kernelSize*kernelSize*inputDepth, m_newResources[1].memory);
   copyInputToDeviceMemory(input, inputSize);
 
   const vk::DescriptorBufferInfo inputBufferDescriptor = { 
@@ -229,8 +268,9 @@ void VulkanConvolution2D::SetCommandBuffer(vk::CommandBuffer& commandBuffer)
                                    *m_pipelineLayout, 0, {m_descriptorSet}, {});
 
   const auto numWorkgroups = (outputSize - 1)/workGroupSize + 1; // round up
-  commandBuffer.dispatch(numWorkgroups, numWorkgroups, 1);
-
+  commandBuffer.dispatch(numWorkgroups+1, numWorkgroups, 1);
+  //commandBuffer.dispatch(3, 4, 1);
+  std::cout << "----------------------> Num Work Groups: "<< numWorkgroups << std::endl;
   vk::BufferMemoryBarrier outputBufferBarrier;
   outputBufferBarrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
   outputBufferBarrier.dstAccessMask = vk::AccessFlagBits::eHostRead;
@@ -340,13 +380,13 @@ uint32_t VulkanConvolution2D::ComputeOutputSize(uint32_t inputSize, uint32_t ker
 }
 
 void VulkanConvolution2D::copyInputToDeviceMemory(float* input, uint32_t inputSize){
-  uint32_t inputFlatSize = inputSize*inputSize;
+  uint32_t inputFlatSize = inputSize*inputSize*inputDepth;
 
   if(1==control.Padding){
     std::cout << "Padding Input\n";
     uint32_t origInputSize = inputSize-padding;
     uint32_t paddingTop = padding/2;
-    const auto bufferSize = origInputSize * sizeof(float);
+    const auto bufferSize = origInputSize *inputDepth* sizeof(float);
 
     std::vector<float> paddedInput(inputFlatSize, 0);
     float* paddedInput_p = paddedInput.data();
@@ -354,7 +394,7 @@ void VulkanConvolution2D::copyInputToDeviceMemory(float* input, uint32_t inputSi
     for(uint32_t row = 0; row < origInputSize; row++){
       int paddedOffset = (row+paddingTop)*inputSize + paddingTop;
       int inputOffset = (row)*origInputSize;
-      std::memcpy(paddedInput_p + paddedOffset, input + inputOffset, bufferSize);
+      std::memcpy(paddedInput_p + paddedOffset*inputDepth, input + inputOffset*inputDepth, bufferSize);
     }
     
     //for (size_t y=0; y<inputSize; ++y) {

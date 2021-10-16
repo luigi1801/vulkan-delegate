@@ -2,12 +2,22 @@
 #include <vulkan/vulkan.hpp>
 #include <fstream>
 
+struct MemDims{
+  uint32_t Batch = 1;
+  uint32_t Height = 1;
+  uint32_t Width = 1;
+  uint32_t Depth = 1;
+};
+
 class VulkanPrimitive
 {
 
  public:
 
   virtual ~VulkanPrimitive();
+  virtual void Init(std::vector<float*> inputs, std::vector<MemDims> inputsDims, 
+                    std::vector<float*> weights, std::vector<MemDims> weightsDims, 
+                    std::vector<float*> outputs, std::vector<MemDims> outputsDims) = 0;
   virtual void Process() = 0;
 
  protected:
