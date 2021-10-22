@@ -24,6 +24,7 @@ class VulkanKernel : public SimpleDelegateKernelInterface {
     int inputTensorIdx = 0;
     int outputTensorIdx = 0;
     int kernelTensorIdx = 0;
+    int biasTensorIdx = 0;
   } Conv2D_Node;
   std::vector<Conv2D_Node> DelegatedNodesConv2D;
   std::vector<std::vector<float>> intermediateTensors;

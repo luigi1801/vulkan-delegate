@@ -53,7 +53,7 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
       {*commandPool, vk::CommandBufferLevel::ePrimary, 1});
 
   // Create Set Layout descriptor
-  const std::array<vk::DescriptorSetLayoutBinding, 3> setLayoutBindings{
+  const std::array<vk::DescriptorSetLayoutBinding, 4> setLayoutBindings{
       {
       // binding,                       type,count,                          flags
        {0, vk::DescriptorType::eStorageBuffer, 1, 
@@ -61,6 +61,8 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
        {1, vk::DescriptorType::eStorageBuffer, 1, 
         vk::ShaderStageFlagBits::eCompute},
        {2, vk::DescriptorType::eStorageBuffer, 1, 
+        vk::ShaderStageFlagBits::eCompute},
+       {3, vk::DescriptorType::eStorageBuffer, 1, 
         vk::ShaderStageFlagBits::eCompute}}};
 
   m_descriptorSetLayout = p_device->createDescriptorSetLayoutUnique(
@@ -70,7 +72,7 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
 
   // Create PoolDescriptor
   std::array<vk::DescriptorPoolSize, 1> poolSizes{
-      {{vk::DescriptorType::eStorageBuffer, 3}}};
+      {{vk::DescriptorType::eStorageBuffer, 4}}};
 
   m_descriptorPool = p_device->createDescriptorPoolUnique(
       {vk::DescriptorPoolCreateFlags(), 1,
@@ -82,7 +84,7 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
 
   // Load shader
   //m_shaderModule = loadShader("shaders/cross_correlation_strided.comp.spv");
-  m_shaderModule = loadShader("shaders/cross_correlation_strided_depthed.comp.spv");
+  m_shaderModule = loadShader("shaders/cross_correlation_strided_depthed_batched_biased.comp.spv");
 
   //Create Descriptor Sets
   m_descriptorSet = p_device->allocateDescriptorSets(
@@ -103,7 +105,110 @@ void VulkanConvolution2D::Init(std::vector<float*> inputs,
                                std::vector<float*> outputs, 
                                std::vector<MemDims> outputsDims){
   inputDepth = weightsDims[0].Depth;
-  Init(inputs[0], inputsDims[0].Height, weights[0], weightsDims[0].Height, outputs[0]);  
+  outputDepth = weightsDims[0].Batch;
+  uint32_t inputSize = inputsDims[0].Height;
+  uint32_t kernelSize = weightsDims[0].Height;
+
+  std::cout<<"Initializing Vulkan Convolution"<<std::endl;
+  std::cout<<"Depth: "<<inputDepth <<std::endl;
+  ComputeRealSizes(inputSize, kernelSize);
+  m_output = outputs[0];
+
+  workGroupSize = 16;
+  
+  struct SpecializationData {
+    uint32_t inputSize;
+    uint32_t inputDepth;
+    uint32_t kernelSize;
+    uint32_t kernelOffset;
+    uint32_t outputSize;
+    uint32_t outputDepth;
+    uint32_t workGroupSize;
+    uint32_t stride;
+  };
+
+  const std::array<vk::SpecializationMapEntry, 8> specializationMapEntries{
+      {{0, offsetof(SpecializationData, inputSize),   
+        sizeof(SpecializationData::inputSize)},
+       {1, offsetof(SpecializationData, inputDepth),   
+        sizeof(SpecializationData::inputDepth)},
+       {2, offsetof(SpecializationData, kernelSize),   
+        sizeof(SpecializationData::kernelSize)},
+       {3, offsetof(SpecializationData, kernelOffset),   
+        sizeof(SpecializationData::kernelOffset)},
+       {4, offsetof(SpecializationData, outputSize),   
+        sizeof(SpecializationData::outputSize)},
+       {5, offsetof(SpecializationData, outputDepth),   
+        sizeof(SpecializationData::outputDepth)},
+       {6, offsetof(SpecializationData, workGroupSize),
+        sizeof(SpecializationData::workGroupSize)},
+       {7, offsetof(SpecializationData, stride),
+        sizeof(SpecializationData::stride)}}};
+
+  
+  uint32_t kernelOffset =  kernelSize*kernelSize*inputDepth;
+  const SpecializationData specializationData{inputSize, inputDepth, kernelSize, kernelOffset, 
+                                              outputSize, outputDepth, workGroupSize, stride};
+  
+  
+  const vk::SpecializationInfo specializationInfo{
+      static_cast<uint32_t>(specializationMapEntries.size()),
+      specializationMapEntries.data(), sizeof(SpecializationData),
+      &specializationData};
+
+  vk::PipelineShaderStageCreateInfo shaderStage;
+  shaderStage.stage = vk::ShaderStageFlagBits::eCompute;
+  shaderStage.module = *m_shaderModule;
+  shaderStage.pName = "main";
+  shaderStage.pSpecializationInfo = &specializationInfo;
+    
+  vk::ComputePipelineCreateInfo computePipelineCreateInfo;
+  computePipelineCreateInfo.setLayout(*m_pipelineLayout);
+  computePipelineCreateInfo.stage = shaderStage;
+
+  m_pipeline 
+      = p_device->createComputePipelineUnique(nullptr, computePipelineCreateInfo);
+
+  createResource(vk::BufferUsageFlagBits::eStorageBuffer,
+                 vk::MemoryPropertyFlagBits::eHostVisible,
+                 inputSize*inputSize*inputDepth*sizeof(float));
+  createResource(vk::BufferUsageFlagBits::eStorageBuffer,
+                 vk::MemoryPropertyFlagBits::eHostVisible,
+                 outputDepth*kernelSize*kernelSize*inputDepth*sizeof(float));
+  createResource(vk::BufferUsageFlagBits::eStorageBuffer,
+                 vk::MemoryPropertyFlagBits::eHostVisible,
+                 outputDepth*sizeof(float));
+  createResource(vk::BufferUsageFlagBits::eStorageBuffer,
+                 vk::MemoryPropertyFlagBits::eHostVisible,
+                 outputSize*outputSize*outputDepth*sizeof(float));
+
+  vku::copyToDeviceMemory(*p_device, weights[0], outputDepth*kernelSize*kernelSize*inputDepth, m_newResources[1].memory);
+  vku::copyToDeviceMemory(*p_device, weights[1], outputDepth, m_newResources[2].memory);
+  copyInputToDeviceMemory(inputs[0], inputSize);
+
+  const vk::DescriptorBufferInfo inputBufferDescriptor = { 
+      m_newResources[0].buffer, 0, VK_WHOLE_SIZE };
+  const vk::DescriptorBufferInfo kernelBufferDescriptor = { 
+      m_newResources[1].buffer, 0, VK_WHOLE_SIZE };
+  const vk::DescriptorBufferInfo outputBufferDescriptor = { 
+      m_newResources[3].buffer, 0, VK_WHOLE_SIZE };
+  const vk::DescriptorBufferInfo biasBufferDescriptor = { 
+      m_newResources[2].buffer, 0, VK_WHOLE_SIZE };
+
+  const std::array<vk::WriteDescriptorSet, 4> computeWriteDescriptorSets{
+      {{m_descriptorSet[0], 0, 0, 1, vk::DescriptorType::eStorageBuffer, 
+        nullptr, &inputBufferDescriptor},
+       {m_descriptorSet[0], 1, 0, 1, vk::DescriptorType::eStorageBuffer, 
+        nullptr, &kernelBufferDescriptor},
+       {m_descriptorSet[0], 3, 0, 1, vk::DescriptorType::eStorageBuffer, 
+        nullptr, &outputBufferDescriptor},
+       {m_descriptorSet[0], 2, 0, 1, vk::DescriptorType::eStorageBuffer, 
+        nullptr, &biasBufferDescriptor}}};
+
+  p_device->updateDescriptorSets(computeWriteDescriptorSets, nullptr);
+
+  std::cout<<"Finished initializing Vulkan Convolution"<<std::endl;
+  SetCommandBuffer(*m_commandBuffers[0]);
 }
 
 void VulkanConvolution2D::Init()
@@ -131,57 +236,41 @@ void VulkanConvolution2D::Init(float* input, uint32_t inputSize,
   ComputeRealSizes(inputSize, kernelSize);
   m_output = output;
 
-  workGroupSize = 4;
-  // Pass SSBO size via specialization constant
-  /*struct SpecializationData {
-    uint32_t inputSize;
-    uint32_t kernelSize;
-    uint32_t outputSize;
-    uint32_t workGroupSize;
-    uint32_t stride;
-  };
-
-  const std::array<vk::SpecializationMapEntry, 5> specializationMapEntries{
-      {{0, offsetof(SpecializationData, inputSize),   
-        sizeof(SpecializationData::inputSize)},
-       {1, offsetof(SpecializationData, kernelSize),   
-        sizeof(SpecializationData::kernelSize)},
-       {2, offsetof(SpecializationData, outputSize),   
-        sizeof(SpecializationData::outputSize)},
-       {3, offsetof(SpecializationData, workGroupSize),
-        sizeof(SpecializationData::workGroupSize)},
-       {4, offsetof(SpecializationData, stride),
-        sizeof(SpecializationData::stride)}}};
-
-  const SpecializationData specializationData{inputSize, kernelSize, outputSize,
-                                              workGroupSize, stride};
-  */
+  workGroupSize = 16;
   
   struct SpecializationData {
     uint32_t inputSize;
+    uint32_t inputDepth;
     uint32_t kernelSize;
+    uint32_t kernelOffset;
     uint32_t outputSize;
+    uint32_t outputDepth;
     uint32_t workGroupSize;
     uint32_t stride;
-    uint32_t inputDepth;
   };
 
-  const std::array<vk::SpecializationMapEntry, 6> specializationMapEntries{
+  const std::array<vk::SpecializationMapEntry, 8> specializationMapEntries{
       {{0, offsetof(SpecializationData, inputSize),   
         sizeof(SpecializationData::inputSize)},
-       {1, offsetof(SpecializationData, kernelSize),   
+       {1, offsetof(SpecializationData, inputDepth),   
+        sizeof(SpecializationData::inputDepth)},
+       {2, offsetof(SpecializationData, kernelSize),   
         sizeof(SpecializationData::kernelSize)},
-       {2, offsetof(SpecializationData, outputSize),   
+       {3, offsetof(SpecializationData, kernelOffset),   
+        sizeof(SpecializationData::kernelOffset)},
+       {4, offsetof(SpecializationData, outputSize),   
         sizeof(SpecializationData::outputSize)},
-       {3, offsetof(SpecializationData, workGroupSize),
+       {5, offsetof(SpecializationData, outputDepth),   
+        sizeof(SpecializationData::outputDepth)},
+       {6, offsetof(SpecializationData, workGroupSize),
         sizeof(SpecializationData::workGroupSize)},
-       {4, offsetof(SpecializationData, stride),
-        sizeof(SpecializationData::stride)},
-       {5, offsetof(SpecializationData, inputDepth),   
-        sizeof(SpecializationData::inputDepth)}}};
+       {7, offsetof(SpecializationData, stride),
+        sizeof(SpecializationData::stride)}}};
 
-  const SpecializationData specializationData{inputSize, kernelSize, outputSize,
-                                              workGroupSize, stride, inputDepth};
+  
+  uint32_t kernelOffset =  kernelSize*kernelSize*inputDepth;
+  const SpecializationData specializationData{inputSize, inputDepth, kernelSize, kernelOffset, 
+                                              outputSize, outputDepth, workGroupSize, stride};
   
   
   const vk::SpecializationInfo specializationInfo{
@@ -207,12 +296,17 @@ void VulkanConvolution2D::Init(float* input, uint32_t inputSize,
                  inputSize*inputSize*inputDepth*sizeof(float));
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 kernelSize*kernelSize*inputDepth*sizeof(float));
+                 outputDepth*kernelSize*kernelSize*inputDepth*sizeof(float));
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 outputSize*outputSize*sizeof(float));
+                 outputDepth*sizeof(float));
+  createResource(vk::BufferUsageFlagBits::eStorageBuffer,
+                 vk::MemoryPropertyFlagBits::eHostVisible,
+                 outputSize*outputSize*outputDepth*sizeof(float));
 
-  vku::copyToDeviceMemory(*p_device, kernel, kernelSize*kernelSize*inputDepth, m_newResources[1].memory);
+  std::vector<float> biasData (outputDepth, 0);
+  vku::copyToDeviceMemory(*p_device, kernel, outputDepth*kernelSize*kernelSize*inputDepth, m_newResources[1].memory);
+  vku::copyToDeviceMemory(*p_device, biasData.data(), outputDepth, m_newResources[2].memory);
   copyInputToDeviceMemory(input, inputSize);
 
   const vk::DescriptorBufferInfo inputBufferDescriptor = { 
@@ -220,15 +314,19 @@ void VulkanConvolution2D::Init(float* input, uint32_t inputSize,
   const vk::DescriptorBufferInfo kernelBufferDescriptor = { 
       m_newResources[1].buffer, 0, VK_WHOLE_SIZE };
   const vk::DescriptorBufferInfo outputBufferDescriptor = { 
+      m_newResources[3].buffer, 0, VK_WHOLE_SIZE };
+  const vk::DescriptorBufferInfo biasBufferDescriptor = { 
       m_newResources[2].buffer, 0, VK_WHOLE_SIZE };
 
-  const std::array<vk::WriteDescriptorSet, 3> computeWriteDescriptorSets{
+  const std::array<vk::WriteDescriptorSet, 4> computeWriteDescriptorSets{
       {{m_descriptorSet[0], 0, 0, 1, vk::DescriptorType::eStorageBuffer, 
         nullptr, &inputBufferDescriptor},
        {m_descriptorSet[0], 1, 0, 1, vk::DescriptorType::eStorageBuffer, 
         nullptr, &kernelBufferDescriptor},
+       {m_descriptorSet[0], 3, 0, 1, vk::DescriptorType::eStorageBuffer, 
+        nullptr, &outputBufferDescriptor},
        {m_descriptorSet[0], 2, 0, 1, vk::DescriptorType::eStorageBuffer, 
-        nullptr, &outputBufferDescriptor}}};
+        nullptr, &biasBufferDescriptor}}};
 
   p_device->updateDescriptorSets(computeWriteDescriptorSets, nullptr);
 
@@ -258,23 +356,31 @@ void VulkanConvolution2D::SetCommandBuffer(vk::CommandBuffer& commandBuffer)
   kernelBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   kernelBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
+  vk::BufferMemoryBarrier biasBufferBarrier;
+  biasBufferBarrier.buffer = m_newResources[2].buffer;
+  biasBufferBarrier.size = VK_WHOLE_SIZE;
+  biasBufferBarrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
+  biasBufferBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+  biasBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  biasBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
   commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eHost,
                                 vk::PipelineStageFlagBits::eComputeShader,
                                 vk::DependencyFlags(), {}, 
-                                {inputBufferBarrier, kernelBufferBarrier}, {});
+                                {inputBufferBarrier, kernelBufferBarrier,biasBufferBarrier}, {});
 
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *m_pipeline);
   commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                    *m_pipelineLayout, 0, {m_descriptorSet}, {});
 
   const auto numWorkgroups = (outputSize - 1)/workGroupSize + 1; // round up
-  commandBuffer.dispatch(numWorkgroups+1, numWorkgroups, 1);
+  commandBuffer.dispatch(numWorkgroups, numWorkgroups, 1);
   //commandBuffer.dispatch(3, 4, 1);
   std::cout << "----------------------> Num Work Groups: "<< numWorkgroups << std::endl;
   vk::BufferMemoryBarrier outputBufferBarrier;
   outputBufferBarrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
   outputBufferBarrier.dstAccessMask = vk::AccessFlagBits::eHostRead;
-  outputBufferBarrier.buffer = m_newResources[2].buffer;
+  outputBufferBarrier.buffer = m_newResources[3].buffer;
   outputBufferBarrier.size = VK_WHOLE_SIZE;
   outputBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   outputBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -335,7 +441,7 @@ void VulkanConvolution2D::Process()
   queue.submit({computeSubmitInfo}, *fence);
   p_device->waitForFences( {*fence}, true, std::numeric_limits<uint64_t>::max());
     
-  vku::copyFromDeviceMemory(*p_device, m_newResources[2].memory, m_output, outputSize*outputSize);
+  vku::copyFromDeviceMemory(*p_device, m_newResources[3].memory, m_output, outputSize*outputSize*outputDepth);
 }
 
 void VulkanConvolution2D::ComputeRealSizes(uint32_t& inputSize, uint32_t kernelSize) 
@@ -365,7 +471,9 @@ void VulkanConvolution2D::ComputeRealSizes(uint32_t& inputSize, uint32_t kernelS
   std::cout << "Stride: " << stride << std::endl;
   std::cout << "Padding: "<<padding << std::endl;
   std::cout << "inputSize: "<<inputSize << std::endl;
+  std::cout << "inputDepth: "<<inputDepth << std::endl;
   std::cout << "outputSize: "<<outputSize << std::endl;
+  std::cout << "outputDepth: "<<outputDepth << std::endl;
 }
 
 uint32_t VulkanConvolution2D::ComputeOutputSize(uint32_t inputSize, uint32_t kernelSize) 

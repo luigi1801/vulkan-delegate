@@ -2,7 +2,7 @@ LIB_SRC = src/
 LIB_SRC_OUT = $(LIB_SRC)libvulkan_primitives_factory.so
 
 OBJECTS = src/vulkan_primitives_factory.o src/vulkan_primitives.o src/vulkan_convolution.o
-SHADER := shaders/cross_correlation_strided_depthed.comp.spv
+SHADER := shaders/cross_correlation_strided_depthed_batched_biased.comp.spv
 EXAMPLE_PATH = examples/example
 
 CXXFLAGS = -std=c++14 -fPIC

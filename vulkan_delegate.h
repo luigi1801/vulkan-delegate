@@ -47,10 +47,10 @@ class VulkanDelegate : public SimpleDelegateInterface {
         retVal = true;
         break;
       } 
-      case kTfLiteBuiltinDepthwiseConv2d: {
-        retVal = true;
-        break;
-      }
+      //case kTfLiteBuiltinDepthwiseConv2d: {
+      //  retVal = true;
+      //  break;
+      //}
     }
     return retVal;
   }
