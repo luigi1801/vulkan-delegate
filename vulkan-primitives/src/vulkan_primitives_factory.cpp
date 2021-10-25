@@ -18,6 +18,54 @@ VulkanPrimitivesFactory::VulkanPrimitivesFactory()
   instance = vk::createInstance(instCreateInfo);
   // pick PhysicalDevice
   const auto allPhysicaldevices = instance.enumeratePhysicalDevices();
+  std::cout<< "Total devices        = " << allPhysicaldevices.size() << "\n";
+  int counter = 0;
+  for(auto physicalDeviceIt : allPhysicaldevices){
+    std::vector<vk::ExtensionProperties> extensionProperties =
+      allPhysicaldevices[counter].enumerateDeviceExtensionProperties();
+    auto properties2 = allPhysicaldevices[counter]
+                         .getProperties2<vk::PhysicalDeviceProperties2,
+                                         vk::PhysicalDeviceVertexAttributeDivisorPropertiesEXT>();
+    //std::cout<< "properties        = " << (properties==nullptr) << "\n";
+    auto properties = properties2.get<vk::PhysicalDeviceProperties2>().properties;
+    std::cout << "\t"
+              << "Properties:\n";
+    std::cout << "\t\t"
+              << "apiVersion        = " ;//<< decodeAPIVersion( properties.apiVersion ) << "\n";
+    std::cout << "\t\t"
+              << "driverVersion     = " //<< decodeDriverVersion( properties.driverVersion, properties.vendorID )
+              << "\n";
+    std::cout << "\t\t"
+              << "vendorID          = " ;//<< decodeVendorID( properties.vendorID ) << "\n";
+    std::cout << "\t\t"
+              << "deviceID          = " << properties.deviceID << "\n";
+    std::cout << "\t\t"
+              << "deviceType        = " << vk::to_string( properties.deviceType ) << "\n";
+    std::cout << "\t\t"
+              << "deviceName        = " << properties.deviceName << "\n";
+              std::cout << "\t\t\t"
+                << "maxComputeSharedMemorySize                      = " << properties.limits.maxComputeSharedMemorySize
+                << "\n";
+      std::cout << "\t\t\t"
+                << "maxComputeWorkGroupCount                        = "
+                << "[" << properties.limits.maxComputeWorkGroupCount[0] << ", "
+                << properties.limits.maxComputeWorkGroupCount[1] << ", "
+                << properties.limits.maxComputeWorkGroupCount[2] << "]"
+                << "\n";
+      std::cout << "\t\t\t"
+                << "maxComputeWorkGroupInvocations                  = "
+                << properties.limits.maxComputeWorkGroupInvocations << "\n";
+      std::cout << "\t\t\t"
+                << "maxComputeWorkGroupSize                         = "
+                << "[" << properties.limits.maxComputeWorkGroupSize[0] << ", "
+                << properties.limits.maxComputeWorkGroupSize[1] << ", " << properties.limits.maxComputeWorkGroupSize[2]
+                << "]"
+                << "\n";
+      std::cout << "\t\t\t"
+                << "maxCullDistances                                = " << properties.limits.maxCullDistances << "\n";    
+    counter++; break; continue;
+
+  }
   for(auto physicalDeviceIt : allPhysicaldevices)
   {
     auto queueFamilies = physicalDeviceIt.getQueueFamilyProperties();
@@ -27,7 +75,8 @@ VulkanPrimitivesFactory::VulkanPrimitivesFactory()
         });
     if (familiesIt != queueFamilies.end())
     {
-      //std::cout<<familiesIt->queueCount<<std::endl;
+     
+            //std::cout<<familiesIt->queueCount<<std::endl;
       queueFamilyIndex = std::distance( queueFamilies.begin(), familiesIt );
       physicalDevice = physicalDeviceIt;
       break;
@@ -64,12 +113,9 @@ VulkanPrimitivesFactory::~VulkanPrimitivesFactory()
 
 std::unique_ptr<VulkanPrimitive> VulkanPrimitivesFactory::GetPrimitive(PrimitiveType type, uint32_t control)
 {
-  std::cout<<std::endl;
-  std::cout<< "Executing GetPrimitive" <<std::endl;
   std::unique_ptr<VulkanPrimitive> Primitive;
   switch(type){
     case Vulkan_Conv2d:{
-      std::cout<< "Creating Vulkan_Conv2d Primitive" <<std::endl;
       VulkanConv2D_Control primitiveControl;
       primitiveControl.AllBits = control;
       Primitive = std::make_unique<VulkanConvolution2D>(

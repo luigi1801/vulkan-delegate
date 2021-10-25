@@ -37,13 +37,14 @@ class VulkanDelegate : public SimpleDelegateInterface {
       : options_(options) {
         vulkanPrimitivesFact = std::make_shared<VulkanPrimitivesFactory>();
       }
-
   virtual bool IsNodeSupportedByDelegate(
       const TfLiteRegistration* registration, const TfLiteNode* node,
       TfLiteContext* context) const override {
     bool retVal = false;
     switch(registration-> builtin_code){   
       case kTfLiteBuiltinConv2d: {
+        TfLiteConvParams convParams = *((TfLiteConvParams*)node->builtin_data);
+        if(convParams.activation == kTfLiteActRelu6)
         retVal = true;
         break;
       } 

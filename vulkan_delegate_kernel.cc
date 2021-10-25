@@ -27,28 +27,44 @@ namespace vulkan {
 TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
                                 const TfLiteDelegateParams* params) {
 
-  VulkanConv2D_Control control = {0};
+  control = {0};
   DelegatedNodesConv2D.resize(params->nodes_to_replace->size);
-  for(int i = 0; i<params->nodes_to_replace->size; i++){
+  //for(int i = 0; i<params->nodes_to_replace->size; i++){
     TfLiteNode* delegated_node = nullptr;
     TfLiteRegistration* delegated_node_registration = nullptr;
     TF_LITE_ENSURE_EQ(
       context,
-      context->GetNodeAndRegistration(context, params->nodes_to_replace->data[i], &delegated_node,
+      context->GetNodeAndRegistration(context, params->nodes_to_replace->data[0], &delegated_node,
                                        &delegated_node_registration),
       kTfLiteOk);
-    DelegatedNodesConv2D[i].inputTensorIdx = delegated_node->inputs->data[0];
-    DelegatedNodesConv2D[i].kernelTensorIdx = delegated_node->inputs->data[1];
-    DelegatedNodesConv2D[i].biasTensorIdx = delegated_node->inputs->data[2];
-    DelegatedNodesConv2D[i].outputTensorIdx = delegated_node->outputs->data[0];    
+    DelegatedNodesConv2D[0].inputTensorIdx = delegated_node->inputs->data[0];
+    DelegatedNodesConv2D[0].kernelTensorIdx = delegated_node->inputs->data[1];
+    DelegatedNodesConv2D[0].biasTensorIdx = delegated_node->inputs->data[2];
+    DelegatedNodesConv2D[0].outputTensorIdx = delegated_node->outputs->data[0];    
+
+    TfLiteTensor& inputTensor = context->tensors[DelegatedNodesConv2D[0].inputTensorIdx];
+    TfLiteTensor& kernelTensor = context->tensors[DelegatedNodesConv2D[0].kernelTensorIdx];
+    TfLiteTensor& biasTensor = context->tensors[DelegatedNodesConv2D[0].biasTensorIdx];
+    TfLiteTensor& outputTensor = context->tensors[DelegatedNodesConv2D[0].outputTensorIdx];
+    //std::cout<<"-> Input Size: "  <<inputTensor.dims->data[0]<<"x"<<inputTensor.dims->data[1]<<"x"<<inputTensor.dims->data[2]<<"x"<<inputTensor.dims->data[3] << "\n";
+    //std::cout<<"-> Kernel Size: " <<kernelTensor.dims->data[0]<<"x"<<kernelTensor.dims->data[1]<<"x"<<kernelTensor.dims->data[2]<<"x"<<kernelTensor.dims->data[3] << "\n";
+    //std::cout<<"-> Bias Size: " <<biasTensor.dims->data[0] << "\n";
+    //std::cout<<"-> output Size: " <<outputTensor.dims->data[0]<<"x"<<outputTensor.dims->data[1]<<"x"<<outputTensor.dims->data[2]<<"x"<<outputTensor.dims->data[3] << "\n";
+    
+    std::vector<MemDims> inputsDims = {{1, inputTensor.dims->data[1], inputTensor.dims->data[1], inputTensor.dims->data[3]}};
+    std::vector<MemDims> weightsDims = {
+      {kernelTensor.dims->data[0], kernelTensor.dims->data[1], kernelTensor.dims->data[1], kernelTensor.dims->data[3]},
+      {1,1,1,biasTensor.dims->data[0]}};
+    std::vector<MemDims> outputsDims = {{1, outputTensor.dims->data[1], outputTensor.dims->data[1], outputTensor.dims->data[3]}};
 
     TfLiteConvParams convParams = *((TfLiteConvParams*)delegated_node->builtin_data);
     control.Padding = kTfLitePaddingValid == convParams.padding ? 0 : 1;
     control.stride_h = convParams.stride_height;
-  }
+  //}
   vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d, control.AllBits);
+  vulkanPrimitive->Init(inputsDims, weightsDims, outputsDims);
 
-  std::cout<<"INITIALIZATION\n";
+  /*std::cout<<"INITIALIZATION\n";
   Id++;
   std::cout<<"Id: " << Id << "\n";
   std::cout<<"######### Nodes #######\n";
@@ -78,7 +94,7 @@ TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
 
   std::cout<<params->input_tensors->size<< "\n";
   std::cout<<params->output_tensors->size<< "\n";
-  
+  */
   return kTfLiteOk;
 }
 
@@ -93,7 +109,7 @@ TfLiteStatus VulkanKernel::Prepare(TfLiteContext* context, TfLiteNode* node) {
     }
   }
 
-  std::cout<<"\n\nPREPARATION\n";
+  /*std::cout<<"\n\nPREPARATION\n";
   std::cout<<"Id: " << Id << "\n";
 
   std::cout<<"######### Tensors #######\n";
@@ -113,13 +129,14 @@ TfLiteStatus VulkanKernel::Prepare(TfLiteContext* context, TfLiteNode* node) {
   //for(int i = 0; i < node->outputs->size; i++){
   //  std::cout << "-->data["<< i << "]: "<<node->outputs->data[i] << "\n";
   //}
-
+  */
   return kTfLiteOk;
 }
 
 TfLiteStatus VulkanKernel::Eval(TfLiteContext* context, TfLiteNode* node) {
   int intTensorId = 0;
-  std::cout<<"\n\nEVALUATION\n";
+  //std::cout<<"\n\nEVALUATION\n";
+  //std::unique_ptr<VulkanPrimitive> vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d, control.AllBits);
   for(auto nodeIt = DelegatedNodesConv2D.begin(); nodeIt<DelegatedNodesConv2D.end();  nodeIt++, intTensorId++){    
 
     std::vector<float*> inputs(1);
@@ -144,19 +161,19 @@ TfLiteStatus VulkanKernel::Eval(TfLiteContext* context, TfLiteNode* node) {
     {
       outputs[0] = intermediateTensors[intTensorId].data();
     }
-    std::cout<<"-> Input Size: "  <<inputTensor.dims->data[0]<<"x"<<inputTensor.dims->data[1]<<"x"<<inputTensor.dims->data[2]<<"x"<<inputTensor.dims->data[3] << "\n";
-    std::cout<<"-> Kernel Size: " <<kernelTensor.dims->data[0]<<"x"<<kernelTensor.dims->data[1]<<"x"<<kernelTensor.dims->data[2]<<"x"<<kernelTensor.dims->data[3] << "\n";
-    std::cout<<"-> Bias Size: " <<biasTensor.dims->data[0] << "\n";
-    std::cout<<"-> output Size: " <<outputTensor.dims->data[0]<<"x"<<outputTensor.dims->data[1]<<"x"<<outputTensor.dims->data[2]<<"x"<<outputTensor.dims->data[3] << "\n";
-    std::vector<MemDims> inputsDims = {{1, inputTensor.dims->data[1], inputTensor.dims->data[1], inputTensor.dims->data[3]}};
-    std::vector<MemDims> weightsDims = {
-      {kernelTensor.dims->data[0], kernelTensor.dims->data[1], kernelTensor.dims->data[1], kernelTensor.dims->data[3]},
-      {1,1,1,biasTensor.dims->data[0]}};
-    std::vector<MemDims> outputsDims = {{1, outputTensor.dims->data[1], outputTensor.dims->data[1], outputTensor.dims->data[3]}};
+    //std::cout<<"-> Input Size: "  <<inputTensor.dims->data[0]<<"x"<<inputTensor.dims->data[1]<<"x"<<inputTensor.dims->data[2]<<"x"<<inputTensor.dims->data[3] << "\n";
+    //std::cout<<"-> Kernel Size: " <<kernelTensor.dims->data[0]<<"x"<<kernelTensor.dims->data[1]<<"x"<<kernelTensor.dims->data[2]<<"x"<<kernelTensor.dims->data[3] << "\n";
+    //std::cout<<"-> Bias Size: " <<biasTensor.dims->data[0] << "\n";
+    //std::cout<<"-> output Size: " <<outputTensor.dims->data[0]<<"x"<<outputTensor.dims->data[1]<<"x"<<outputTensor.dims->data[2]<<"x"<<outputTensor.dims->data[3] << "\n";
+    //std::vector<MemDims> inputsDims = {{1, inputTensor.dims->data[1], inputTensor.dims->data[1], inputTensor.dims->data[3]}};
+    //std::vector<MemDims> weightsDims = {
+    //  {kernelTensor.dims->data[0], kernelTensor.dims->data[1], kernelTensor.dims->data[1], kernelTensor.dims->data[3]},
+    //  {1,1,1,biasTensor.dims->data[0]}};
+    //std::vector<MemDims> outputsDims = {{1, outputTensor.dims->data[1], outputTensor.dims->data[1], outputTensor.dims->data[3]}};
 
     //VulkanConvolution2D* vulkanConv = (static_cast<VulkanConvolution2D*>(vulkanPrimitive.get()));
-    vulkanPrimitive->Init(inputs, inputsDims, weights, weightsDims, outputs, outputsDims);
-    vulkanPrimitive->Process();
+    //vulkanPrimitive->Init(inputsDims, weightsDims, outputsDims);
+    vulkanPrimitive->Process(inputs, weights, outputs);
   }
   /*
   std::cout<<"\n\nEVALUATION\n";

@@ -7,7 +7,8 @@ layout (constant_id = 3) const uint KERNEL_OFFSET = 3;
 layout (constant_id = 4) const uint OUTPUT_SIZE = 3;
 layout (constant_id = 5) const uint OUTPUT_DEPTH = 1;
 layout (constant_id = 6) const uint WORKGROUP_SIZE = 1;
-layout (constant_id = 7) const uint STRIDE = 1;
+layout (constant_id = 7) const uint WORKGROUP_SIZE_Z = 1;
+layout (constant_id = 8) const uint STRIDE = 1;
 
 layout(binding = 0) buffer Inp {
   float input_data[ ];
@@ -36,11 +37,11 @@ layout(binding = 3) buffer Outp {
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (local_size_x_id = 6) in;
 layout (local_size_y_id = 6) in;
-layout (local_size_z_id = 5) in;
+layout (local_size_z_id = 7) in;
 
 void main() {
   // return when out of bounds (i.e. the workgroup size does not fit the output size)
-  if (gl_GlobalInvocationID.x >= OUTPUT_SIZE || gl_GlobalInvocationID.y >= OUTPUT_SIZE)
+  if (gl_GlobalInvocationID.x >= OUTPUT_SIZE || gl_GlobalInvocationID.y >= OUTPUT_SIZE || gl_GlobalInvocationID.z >= OUTPUT_DEPTH)
     return;
 
   float sum = bias_data[gl_GlobalInvocationID.z];
@@ -60,5 +61,6 @@ void main() {
     }
   }
   output_data[(gl_GlobalInvocationID.y*OUTPUT_SIZE + gl_GlobalInvocationID.x)*OUTPUT_DEPTH + gl_GlobalInvocationID.z] = sum < 0 ? 0 : sum > 6 ? 6 : sum;
+  
 
 }

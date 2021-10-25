@@ -15,10 +15,12 @@ class VulkanPrimitive
  public:
 
   virtual ~VulkanPrimitive();
-  virtual void Init(std::vector<float*> inputs, std::vector<MemDims> inputsDims, 
-                    std::vector<float*> weights, std::vector<MemDims> weightsDims, 
-                    std::vector<float*> outputs, std::vector<MemDims> outputsDims) = 0;
-  virtual void Process() = 0;
+  virtual void Init(std::vector<MemDims> inputsDims, 
+                    std::vector<MemDims> weightsDims, 
+                    std::vector<MemDims> outputsDims) = 0;
+  virtual void Process(std::vector<float*> inputs,
+                       std::vector<float*> weights,
+                       std::vector<float*> outputs) = 0;
 
  protected:
   vk::PhysicalDevice* p_physicalDevice;
