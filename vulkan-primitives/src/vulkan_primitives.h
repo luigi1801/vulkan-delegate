@@ -35,10 +35,12 @@ class VulkanPrimitive
   vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
   vk::UniqueDescriptorPool m_descriptorPool;
   vk::UniqueShaderModule m_shaderModule;
+  vk::PipelineShaderStageCreateInfo m_shaderStage;
   std::vector<vk::DescriptorSet> m_descriptorSet;
     
   vk::UniquePipelineLayout m_pipelineLayout;
   vk::UniquePipeline m_pipeline;
+  vk::ComputePipelineCreateInfo m_computePipelineCreateInfo;
 
   float* m_output = nullptr;
 

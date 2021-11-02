@@ -52,8 +52,8 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
       vk::CommandPoolCreateFlagBits::eResetCommandBuffer, m_queueFamilyIndex));
 
   // Create command buffer
-  m_commandBuffers = p_device->allocateCommandBuffersUnique(
-      {*commandPool, vk::CommandBufferLevel::ePrimary, 1});
+  //m_commandBuffers = p_device->allocateCommandBuffersUnique(
+  //    {*commandPool, vk::CommandBufferLevel::ePrimary, 1});
 
   // Create Set Layout descriptor
   const std::array<vk::DescriptorSetLayoutBinding, 4> setLayoutBindings{
@@ -111,24 +111,13 @@ void VulkanConvolution2D::Init(std::vector<MemDims> inputsDims,
   kernelSize = weightsDims[0].Height;
   ComputeRealSizes(inputSize, kernelSize);
 
-  //std::cout<<"Initializing Vulkan Convolution"<<std::endl;
+  std::cout<<"Initializing Vulkan Convolution"<<std::endl;
 
   workGroupSizeZ = outputDepth > 64 ? 64 : outputDepth;
   workGroupSize = sqrt(1024/workGroupSizeZ);
   
-  struct SpecializationData {
-    uint32_t inputSize;
-    uint32_t inputDepth;
-    uint32_t kernelSize;
-    uint32_t kernelOffset;
-    uint32_t outputSize;
-    uint32_t outputDepth;
-    uint32_t workGroupSize;
-    uint32_t workGroupSizeZ;
-    uint32_t stride;
-  };
 
-  const std::array<vk::SpecializationMapEntry, 9> specializationMapEntries{
+  m_specializationMapEntries = {
       {{0, offsetof(SpecializationData, inputSize),   
         sizeof(SpecializationData::inputSize)},
        {1, offsetof(SpecializationData, inputDepth),   
@@ -148,42 +137,50 @@ void VulkanConvolution2D::Init(std::vector<MemDims> inputsDims,
        {8, offsetof(SpecializationData, stride),
         sizeof(SpecializationData::stride)}}};
 
-  
+
   uint32_t kernelOffset =  kernelSize*kernelSize*inputDepth;
-  const SpecializationData specializationData{inputSize, inputDepth, kernelSize, kernelOffset, 
+  m_specializationData = {inputSize, inputDepth, kernelSize, kernelOffset, 
                                               outputSize, outputDepth, workGroupSize, workGroupSizeZ, stride};
   
   
-  const vk::SpecializationInfo specializationInfo{
-      static_cast<uint32_t>(specializationMapEntries.size()),
-      specializationMapEntries.data(), sizeof(SpecializationData),
-      &specializationData};
+  m_specializationInfo = {
+      static_cast<uint32_t>(m_specializationMapEntries.size()),
+      m_specializationMapEntries.data(), sizeof(SpecializationData),
+      &m_specializationData};
 
-  vk::PipelineShaderStageCreateInfo shaderStage;
-  shaderStage.stage = vk::ShaderStageFlagBits::eCompute;
-  shaderStage.module = *m_shaderModule;
-  shaderStage.pName = "main";
-  shaderStage.pSpecializationInfo = &specializationInfo;
+  //vk::PipelineShaderStageCreateInfo shaderStage;
+  m_shaderStage.stage = vk::ShaderStageFlagBits::eCompute;
+  m_shaderStage.module = *m_shaderModule;
+  m_shaderStage.pName = "main";
+  m_shaderStage.pSpecializationInfo = &m_specializationInfo;
     
-  vk::ComputePipelineCreateInfo computePipelineCreateInfo;
-  computePipelineCreateInfo.setLayout(*m_pipelineLayout);
-  computePipelineCreateInfo.stage = shaderStage;
+  //vk::ComputePipelineCreateInfo computePipelineCreateInfo;
+  m_computePipelineCreateInfo.setLayout(*m_pipelineLayout);
+  m_computePipelineCreateInfo.stage = m_shaderStage;
 
-  m_pipeline 
-      = p_device->createComputePipelineUnique(nullptr, computePipelineCreateInfo);
+  //m_pipeline 
+  //    = p_device->createComputePipelineUnique(nullptr, computePipelineCreateInfo);
 
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 inputSize*inputSize*inputDepth*sizeof(float));
+                 inputSize*inputSize*inputDepth*sizeof(float),
+                 vk::AccessFlagBits::eHostWrite,
+                 vk::AccessFlagBits::eShaderRead);
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 outputDepth*kernelSize*kernelSize*inputDepth*sizeof(float));
+                 outputDepth*kernelSize*kernelSize*inputDepth*sizeof(float),
+                 vk::AccessFlagBits::eHostWrite,
+                 vk::AccessFlagBits::eShaderRead);
   createResource(vk::BufferUsageFlagBits::eStorageBuffer,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 outputDepth*sizeof(float));
+                 outputDepth*sizeof(float),
+                 vk::AccessFlagBits::eHostWrite,
+                 vk::AccessFlagBits::eShaderRead);
   createResource(vk::BufferUsageFlagBits::eTransferDst,
                  vk::MemoryPropertyFlagBits::eHostVisible,
-                 outputSize*outputSize*outputDepth*sizeof(float));
+                 outputSize*outputSize*outputDepth*sizeof(float),
+                 vk::AccessFlagBits::eShaderWrite,
+                 vk::AccessFlagBits::eHostRead);
 
   //vku::copyToDeviceMemory(*p_device, weights[0], outputDepth*kernelSize*kernelSize*inputDepth, m_newResources[1].memory);
   //vku::copyToDeviceMemory(*p_device, weights[1], outputDepth, m_newResources[2].memory);
@@ -211,7 +208,6 @@ void VulkanConvolution2D::Init(std::vector<MemDims> inputsDims,
   p_device->updateDescriptorSets(computeWriteDescriptorSets, nullptr);
 
   //std::cout<<"Finished initializing Vulkan Convolution"<<std::endl;
-  SetCommandBuffer(*m_commandBuffers[0]);
 }
 
 void VulkanConvolution2D::Init()
@@ -219,42 +215,18 @@ void VulkanConvolution2D::Init()
   std::cout<<"Initializing Vulkan Convolution"<<std::endl;
 }
 
-void VulkanConvolution2D::SetCommandBuffer(vk::CommandBuffer& commandBuffer)
+void VulkanConvolution2D::SetCommandBuffer(vk::CommandBuffer& commandBuffer, vk::Pipeline pipeline)
 {
   vk::CommandBufferBeginInfo info;
   //info.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;
   commandBuffer.begin(info);
 
-  vk::BufferMemoryBarrier inputBufferBarrier;
-  inputBufferBarrier.buffer = m_newResources[0].buffer;
-  inputBufferBarrier.size = VK_WHOLE_SIZE;
-  inputBufferBarrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
-  inputBufferBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-  inputBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  inputBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-  vk::BufferMemoryBarrier kernelBufferBarrier;
-  kernelBufferBarrier.buffer = m_newResources[1].buffer;
-  kernelBufferBarrier.size = VK_WHOLE_SIZE;
-  kernelBufferBarrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
-  kernelBufferBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-  kernelBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  kernelBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-  vk::BufferMemoryBarrier biasBufferBarrier;
-  biasBufferBarrier.buffer = m_newResources[2].buffer;
-  biasBufferBarrier.size = VK_WHOLE_SIZE;
-  biasBufferBarrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
-  biasBufferBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-  biasBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  biasBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
   commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eHost,
                                 vk::PipelineStageFlagBits::eComputeShader,
                                 vk::DependencyFlags(), {}, 
-                                {inputBufferBarrier, kernelBufferBarrier,biasBufferBarrier}, {});
+                                {m_newResources[0].barrier, m_newResources[1].barrier, m_newResources[2].barrier}, {});
 
-  commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *m_pipeline);
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
   commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                    *m_pipelineLayout, 0, {m_descriptorSet}, {});
 
@@ -262,24 +234,17 @@ void VulkanConvolution2D::SetCommandBuffer(vk::CommandBuffer& commandBuffer)
   const auto numWorkgroupsZ = (outputDepth - 1)/workGroupSizeZ + 1; // round up
   commandBuffer.dispatch(numWorkgroups, numWorkgroups, numWorkgroupsZ);
   //std::cout << "----------------------> Num Work Groups: "<< numWorkgroups << "x"<< numWorkgroups << "x"<< outputDepth<<"="<< numWorkgroups*numWorkgroups*outputDepth << std::endl;
-  vk::BufferMemoryBarrier outputBufferBarrier;
-  outputBufferBarrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-  outputBufferBarrier.dstAccessMask = vk::AccessFlagBits::eHostRead;
-  outputBufferBarrier.buffer = m_newResources[3].buffer;
-  outputBufferBarrier.size = VK_WHOLE_SIZE;
-  outputBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  outputBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     
   commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                 vk::PipelineStageFlagBits::eHost,
                                 vk::DependencyFlags(), {}, 
-                                {outputBufferBarrier} , {});
+                                {m_newResources[3].barrier} , {});
 
   commandBuffer.end();
 }
 
 void VulkanConvolution2D::createResource(vk::BufferUsageFlags useage, vk::MemoryPropertyFlags memFlags,
-    vk::DeviceSize size)
+    vk::DeviceSize size, vk::AccessFlagBits srcAccessMask, vk::AccessFlagBits dstAccessMask)
 {
   NewResource newRes;
 
@@ -306,12 +271,29 @@ void VulkanConvolution2D::createResource(vk::BufferUsageFlags useage, vk::Memory
 
   p_device->bindBufferMemory(newRes.buffer, newRes.memory, 0);
 
+  newRes.barrier.buffer = newRes.buffer;
+  newRes.barrier.size = VK_WHOLE_SIZE;
+  newRes.barrier.srcAccessMask = srcAccessMask;
+  newRes.barrier.dstAccessMask = dstAccessMask;
+  newRes.barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  newRes.barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
   m_newResources.push_back(newRes);
 }
 
 void VulkanConvolution2D::Process(std::vector<float*> inputs, std::vector<float*> weights, 
                                std::vector<float*> outputs) 
 {
+  
+  std::vector<vk::UniqueCommandBuffer> commandBuffers = p_device->allocateCommandBuffersUnique(
+      {*commandPool, vk::CommandBufferLevel::ePrimary, 1});
+
+  vk::Pipeline pipeline 
+    = p_device->createComputePipeline(nullptr, m_computePipelineCreateInfo);
+  SetCommandBuffer(*commandBuffers[0], pipeline);
+
+
+
   m_output = outputs[0];
   //std::cout << "Processing a Convolution"<<std::endl;
   vku::copyToDeviceMemory(*p_device, weights[0], outputDepth*kernelSize*kernelSize*inputDepth, m_newResources[1].memory);
@@ -325,13 +307,15 @@ void VulkanConvolution2D::Process(std::vector<float*> inputs, std::vector<float*
   vk::SubmitInfo computeSubmitInfo;
   computeSubmitInfo.pWaitDstStageMask = &waitStageMask;
   computeSubmitInfo.commandBufferCount = 1;
-  computeSubmitInfo.pCommandBuffers = &*m_commandBuffers[0];
+  computeSubmitInfo.pCommandBuffers = &*commandBuffers[0];
 
   auto fence = p_device->createFenceUnique({});
   queue.submit({computeSubmitInfo}, *fence);
   p_device->waitForFences( {*fence}, true, std::numeric_limits<uint64_t>::max());
     
   vku::copyFromDeviceMemory(*p_device, m_newResources[3].memory, m_output, outputSize*outputSize*outputDepth);
+
+  p_device->destroyPipeline( pipeline );
 }
 
 void VulkanConvolution2D::ComputeRealSizes(uint32_t& inputSize, uint32_t kernelSize) 
@@ -378,7 +362,7 @@ uint32_t VulkanConvolution2D::ComputeOutputSize(uint32_t inputSize, uint32_t ker
 }
 
 void VulkanConvolution2D::copyInputToDeviceMemory(float* input, uint32_t inputSize){
-  uint32_t inputFlatSize = inputSize*inputSize*inputDepth;
+  uint32_t inputFlatSize = (inputSize)*(inputSize)*inputDepth;
 
   if(1==control.Padding && 0 != padding){
     //std::cout << "Padding Input\n";
