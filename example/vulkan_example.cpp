@@ -1,6 +1,6 @@
 #include "tensorflow/lite/kernels/register.h"
-#include "tensorflow/lite/delegates/vulkan/vulkan_delegate.h"
-#include "tensorflow/lite/delegates/vulkan/vulkan_delegate_adaptor.h"
+#include "tensorflow/lite/delegates/vulkan-delegate/vulkan_delegate.h"
+#include "tensorflow/lite/delegates/vulkan-delegate/vulkan_delegate_adaptor.h"
 
 #include "tensorflow/lite/c/common.h"
 #include <fstream>
@@ -213,7 +213,8 @@ void mobilenetTime(){
   auto start = std::chrono::steady_clock::now();
   for(int i =0;i<100;i++){  
     interpreter->Invoke();
-  }  auto end = std::chrono::steady_clock::now();
+  }  
+  auto end = std::chrono::steady_clock::now();
   std::cout << "Elapsed time in nanoseconds: "
         << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()
         << " ns" << std::endl;
@@ -300,7 +301,7 @@ void mobilenetAcc(){
     }else{
       std::cout <<" (FALSE)";   
     }
-    std::cout <<std::endl;   
+    std::cout <<std::endl;  
   }
   std::cout <<"Total matches = " << matchCounter << "("<<((float)matchCounter*100/500)<<"%)\n";   
   

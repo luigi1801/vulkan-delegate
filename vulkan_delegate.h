@@ -44,7 +44,9 @@ class VulkanDelegate : public SimpleDelegateInterface {
     switch(registration-> builtin_code){   
       case kTfLiteBuiltinConv2d: {
         TfLiteConvParams convParams = *((TfLiteConvParams*)node->builtin_data);
-        if(convParams.activation == kTfLiteActRelu6)
+        //std::cout<<"BP"<<convParams.stride_width<<std::endl;
+        if(convParams.activation == kTfLiteActRelu6
+           && convParams.stride_width == 1)
         retVal = true;
         break;
       } 

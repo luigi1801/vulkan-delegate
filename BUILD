@@ -3,7 +3,7 @@ cc_import(
   hdrs = [
 	"vulkan-primitives/src/vulkan_primitives_factory.h", 
 	"vulkan-primitives/src/vulkan_primitives.h", 
-	"vulkan-primitives/src/vulkan_convolution.h",
+	"vulkan-primitives/src/vulkan_convolution_k1x1.h",
   ],
   shared_library = "vulkan-primitives/src/libvulkan_primitives_factory.so",
 )

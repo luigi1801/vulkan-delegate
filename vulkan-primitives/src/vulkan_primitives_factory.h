@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vulkan_primitives.h"
-#include "vulkan_convolution.h"
+#include "vulkan_convolution_k1x1.h"
 #include <memory>
 #include <vulkan/vulkan.hpp>
 

@@ -20,6 +20,7 @@ VulkanPrimitivesFactory::VulkanPrimitivesFactory()
   const auto allPhysicaldevices = instance.enumeratePhysicalDevices();
   std::cout<< "Total devices        = " << allPhysicaldevices.size() << "\n";
   int counter = 0;
+  if(false){
   for(auto physicalDeviceIt : allPhysicaldevices){
      VkPhysicalDeviceProperties                 properties;
     vkGetPhysicalDeviceProperties(physicalDeviceIt, &properties);
@@ -389,6 +390,7 @@ VulkanPrimitivesFactory::VulkanPrimitivesFactory()
                 << !!properties.sparseProperties.residencyStandard3DBlockShape << "\n";
       std::cout << "\n";//  counter++; break; continue;
   }
+  }
   for(auto physicalDeviceIt : allPhysicaldevices)
   {
     auto queueFamilies = physicalDeviceIt.getQueueFamilyProperties();
@@ -438,9 +440,9 @@ std::unique_ptr<VulkanPrimitive> VulkanPrimitivesFactory::GetPrimitive(Primitive
   std::unique_ptr<VulkanPrimitive> Primitive;
   switch(type){
     case Vulkan_Conv2d:{
-      VulkanConv2D_Control primitiveControl;
+      VulkanConv2Dk1x1_Control primitiveControl;
       primitiveControl.AllBits = control;
-      Primitive = std::make_unique<VulkanConvolution2D>(
+      Primitive = std::make_unique<VulkanConvolution2Dk1x1>(
           &physicalDevice,queueFamilyIndex,&device, primitiveControl);
       break;
     }
