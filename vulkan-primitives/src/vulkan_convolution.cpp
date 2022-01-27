@@ -142,7 +142,7 @@ void VulkanConvolution2D::Init(std::vector<MemDims> inputsDims,
   m_specializationData = {inputSize, inputDepth, kernelSize, kernelOffset, 
                                               outputSize, outputDepth, workGroupSize, workGroupSizeZ, stride};
   
-  
+  //std::cout<<
   m_specializationInfo = {
       static_cast<uint32_t>(m_specializationMapEntries.size()),
       m_specializationMapEntries.data(), sizeof(SpecializationData),
@@ -342,12 +342,12 @@ void VulkanConvolution2D::ComputeRealSizes(uint32_t& inputSize, uint32_t kernelS
   
   inputSize += padding;
   outputSize = (inputSize - kernelSize)/stride + 1;
-  //std::cout << "Stride: " << stride << std::endl;
-  //std::cout << "Padding: "<<padding << std::endl;
-  //std::cout << "inputSize: "<<inputSize << std::endl;
-  //std::cout << "inputDepth: "<<inputDepth << std::endl;
-  //std::cout << "outputSize: "<<outputSize << std::endl;
-  //std::cout << "outputDepth: "<<outputDepth << std::endl;
+  std::cout << "Stride: " << stride << std::endl;
+  std::cout << "Padding: "<<padding << std::endl;
+  std::cout << "inputSize: "<<inputSize << std::endl;
+  std::cout << "inputDepth: "<<inputDepth << std::endl;
+  std::cout << "outputSize: "<<outputSize << std::endl;
+  std::cout << "outputDepth: "<<outputDepth << std::endl;
 }
 
 uint32_t VulkanConvolution2D::ComputeOutputSize(uint32_t inputSize, uint32_t kernelSize) 
