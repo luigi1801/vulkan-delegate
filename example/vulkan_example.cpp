@@ -9,6 +9,8 @@
 #include <chrono>
 #include <unistd.h>
 
+std::string LOG = "";
+
 void linearExample(){
   std::cout << "Loading Linear model: y = 2x-1" << std::endl;
   std::unique_ptr<tflite::FlatBufferModel> model = tflite::FlatBufferModel::BuildFromFile("linear.tflite");
@@ -139,7 +141,7 @@ void conv2DExample(){
 };
 
 
-void ReadAvailImag(std::string FileName, std::vector<std::string>& list){
+void ReadFileStr(std::string FileName, std::vector<std::string>& list){
   // Load list of images to be processed
   std::ifstream file(FileName);
   if (!file)
@@ -151,7 +153,7 @@ void ReadAvailImag(std::string FileName, std::vector<std::string>& list){
   file.close();
 };
 
-void ReadAvailImagRes(std::string FileName, std::vector<int>& list){
+void ReadFileInts(std::string FileName, std::vector<int>& list){
   // Load list of images to be processed
   std::ifstream file(FileName);
   if (!file)
@@ -165,7 +167,7 @@ void ReadAvailImagRes(std::string FileName, std::vector<int>& list){
 
 void mobilenetTime(){
   std::vector<std::string> availableImageList;
-  ReadAvailImag("timeTest/image_list.txt", availableImageList);
+  ReadFileStr("timeTest/image_list.txt", availableImageList);
     
   //Loading Model, Delegate, interpreter and graph  
   std::unique_ptr<tflite::FlatBufferModel> model = 
@@ -232,8 +234,8 @@ void mobilenetTime(){
 void mobilenetAcc(){
   std::vector<std::string> availableImageList;
   std::vector<int> availableImageListRes;
-  ReadAvailImag("dataset/image_list.txt", availableImageList);
-  ReadAvailImagRes("dataset/image_list_res.txt", availableImageListRes);
+  ReadFileStr("dataset/image_list.txt", availableImageList);
+  ReadFileInts("dataset/image_list_res.txt", availableImageListRes);
     
   //Loading Model, Delegate, interpreter and graph  
   std::unique_ptr<tflite::FlatBufferModel> model = 
@@ -307,10 +309,109 @@ void mobilenetAcc(){
   
 };
 
+
+int dummyModelTime(bool modGraph, std::string modelName, std::vector<float>& outputVect, int output_size){
+  int ITERATIONS = 100;
+  std::vector<std::string> availableImageList;
+  ReadFileStr("timeTest/image_list.txt", availableImageList);
+    
+  //Loading Model, Delegate, interpreter and graph  
+  std::unique_ptr<tflite::FlatBufferModel> model = 
+       tflite::FlatBufferModel::BuildFromFile(modelName.c_str());
+
+  if(!model){
+    std::cout << "Failed to mmap model" << std::endl;
+    exit(0);
+  }
+
+  std::cout << "Creating Interpreter" << std::endl;
+  tflite::ops::builtin::BuiltinOpResolver resolver;
+  std::unique_ptr<tflite::Interpreter> interpreter;
+  tflite::InterpreterBuilder(*model.get(), resolver)(&interpreter);
+
+  std::cout << "Creating Delegate" << std::endl;
+  VulkanDelegateOptions params = TfLiteVulkanOptionsDefault();
+  auto* delegate_ptr = TfLiteVulkanDelegateCreate(&params);
+
+  tflite::Interpreter::TfLiteDelegatePtr delegate(delegate_ptr,
+  [](TfLiteDelegate* delegate) {
+     TfLiteVulkanDelegateDelete(delegate);
+  });
+
+  std::cout << "Modifying Graph with delegate" << std::endl;
+  if(modGraph) interpreter->ModifyGraphWithDelegate(delegate.get());
+  interpreter->AllocateTensors();
+
+  //std::cout << "Set input" << std::endl;
+  float* input = interpreter->typed_input_tensor<float>(0);
+  float* output = interpreter->typed_output_tensor<float>(0);
+  int xS = 224, yS = 224, zS = 3;
+  int sizebuff = xS*yS*zS;
+  std::vector<uint8_t>buffInt(sizebuff, 0);
+
+  auto path = "timeTest/" + availableImageList[0];
+  std::ifstream inFile(path, std::ios::in | std::ios::binary);
+  if (!inFile) throw "Failed to open image data " + path;
+  inFile.read(reinterpret_cast<char*>(buffInt.data()), sizebuff);
+  inFile.close();
+
+  for (int i = 0; i< sizebuff ;i++) {
+    auto val = buffInt[i];
+    input[i] = (val / 255.0 - 0.5) * 2.0;
+  }
+  auto start = std::chrono::steady_clock::now();
+  for(int i =0;i<ITERATIONS;i++){  
+    interpreter->Invoke();
+  }  
+  auto end = std::chrono::steady_clock::now();
+
+  for(int i=0;i<output_size*output_size; i++){
+    outputVect[i] = output[i];
+  }
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/ITERATIONS;
+};
+
+bool compareVector(int vectSize, std::vector<float>& vect1, std::vector<float>& vect2){
+  float error = 2e-5;
+  for(int i =0;i<vectSize*vectSize; i++)
+    if (vect1[i]-vect2[i] > error || vect2[i]-vect1[i] > error)
+      return false;
+  return true;
+}
+
+void dummyModelsTest(){
+  std::vector<std::string> availableModelsList;
+  ReadFileStr("models/models_list.txt", availableModelsList);
+  int output_size = 224;
+  for(std::string modelName:availableModelsList){
+    output_size -= 2;
+    LOG += "\n####################\nExecuting model:" + modelName + "\n";    
+    std::cout << std::endl<< "####################" << std::endl<< "Executing model: " << modelName.c_str() << std::endl;
+    std::vector<float> output_tf(output_size*output_size);
+    std::vector<float> output_vulkan(output_size*output_size);
+    int Time1 = dummyModelTime(false, modelName, output_tf, output_size);
+    int Time2 = dummyModelTime(true, modelName, output_vulkan, output_size);
+    LOG += std::string("Time With TFLite: ")+
+      std::to_string(Time1)+
+      std::string(" ns\nTime With TFLite+vulkan: ")+
+      std::to_string(Time2)+
+      std::string(" ns\n");
+    //std::cout << output_tf[i]-output_vulkan[i]<< std::endl;
+    if (compareVector(output_size, output_tf,output_vulkan))
+      LOG += "Both vectors are equal\n";
+    else
+      LOG += "BOTH  VECTORS ARE DIFFERENT\n";
+
+  }
+}
+
+
 int main(int argc, char* argv[])
 {
-    //mobilenetAcc();
-    mobilenetTime();
+  dummyModelsTest();
+  std::cout<<LOG.c_str();
+    //dummyModelTime();
+    //mobilenetTime();
     //conv2DExample();
     return 0;
 }
