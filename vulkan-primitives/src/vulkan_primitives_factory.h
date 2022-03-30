@@ -1,12 +1,14 @@
 #pragma once
 
 #include "vulkan_primitives.h"
-#include "vulkan_convolution_k1x1.h"
+//#include "vulkan_convolution_k1x1.h"
+#include "vulkan_convolution.h"
 #include <memory>
 #include <vulkan/vulkan.hpp>
 
 enum PrimitiveType {
   Vulkan_Conv2d,
+  Vulkan_Conv2d_k1x1,
   Vulkan_Last
 };
 

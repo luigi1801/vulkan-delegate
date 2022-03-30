@@ -26,7 +26,7 @@ class VulkanKernel : public SimpleDelegateKernelInterface {
     int kernelTensorIdx = 0;
     int biasTensorIdx = 0;
   } Conv2D_Node;
-  VulkanConv2Dk1x1_Control control;
+  VulkanConv2D_Control control;
   std::vector<Conv2D_Node> DelegatedNodesConv2D;
   std::vector<std::vector<float>> intermediateTensors;
 

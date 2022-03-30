@@ -439,13 +439,22 @@ std::unique_ptr<VulkanPrimitive> VulkanPrimitivesFactory::GetPrimitive(Primitive
 {
   std::unique_ptr<VulkanPrimitive> Primitive;
   switch(type){
-    case Vulkan_Conv2d:{
+    case Vulkan_Conv2d_k1x1:
+    case Vulkan_Conv2d:
+    {
+      VulkanConv2D_Control primitiveControl;
+      primitiveControl.AllBits = control;
+      Primitive = std::make_unique<VulkanConvolution2D>(
+          &physicalDevice,queueFamilyIndex,&device, primitiveControl);
+      break;
+    }
+    /*{
       VulkanConv2Dk1x1_Control primitiveControl;
       primitiveControl.AllBits = control;
       Primitive = std::make_unique<VulkanConvolution2Dk1x1>(
           &physicalDevice,queueFamilyIndex,&device, primitiveControl);
       break;
-    }
+    }*/
     default:{
       break;
     }

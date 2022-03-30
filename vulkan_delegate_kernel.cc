@@ -61,7 +61,7 @@ TfLiteStatus VulkanKernel::Init(TfLiteContext* context,
     control.Padding = kTfLitePaddingValid == convParams.padding ? 0 : 1;
     control.stride_h = convParams.stride_height;
   //}
-  vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d, control.AllBits);
+  vulkanPrimitive = vulkanPrimitivesFact_->GetPrimitive(Vulkan_Conv2d_k1x1, control.AllBits);
   vulkanPrimitive->Init(inputsDims, weightsDims, outputsDims);
 
   /*std::cout<<"INITIALIZATION\n";

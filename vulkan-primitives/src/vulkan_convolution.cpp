@@ -6,13 +6,14 @@
 #include "vulkan_convolution.h"
 //#include "cross_correlation.hpp"
 
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
 #include <getopt.h>
 #include <iomanip>
-#include<unistd.h>
+#include <unistd.h>
 #include "vkutils.hpp"
 #include <math.h> 
 
@@ -36,7 +37,7 @@ VulkanConvolution2D::VulkanConvolution2D(vk::PhysicalDevice* physicalDevice,
                                          VulkanConv2D_Control primitiveControl)
     : control(primitiveControl)
 {
-  std::cout<<"Creating Instance of Convolution with vulkan"<<std::endl;
+  std::cout<<"Creating Instance of Convolution 2D SIMPLE with vulkan"<<std::endl;
   // VkPhysicalDeviceProperties pProperties;//physicalDevice->getPhysicalDeviceProperties();
   // vkGetPhysicalDeviceProperties(*physicalDevice, &pProperties);
   // 
