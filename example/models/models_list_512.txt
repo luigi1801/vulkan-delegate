@@ -1,0 +1,9 @@
+models/model_k3x512.tflite
+models/model_k5x512.tflite
+models/model_k7x512.tflite
+models/model_k9x512.tflite
+models/model_k11x512.tflite
+models/model_k13x512.tflite
+models/model_k15x512.tflite
+models/model_k17x512.tflite
+models/model_k19x512.tflite

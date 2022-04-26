@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <chrono>
 #include <unistd.h>
+#include <cstdlib>
+#include <ctime>
 
 std::string LOG = "";
 
@@ -310,10 +312,9 @@ void mobilenetAcc(){
 };
 
 
-int dummyModelTime(bool modGraph, std::string modelName, std::vector<float>& outputVect, int output_size){
+int dummyModelTime(bool modGraph, std::string modelName, std::vector<uint8_t>& inImage, int input_size,
+                   std::vector<float>& outputVect, int output_size){
   int ITERATIONS = 100;
-  std::vector<std::string> availableImageList;
-  ReadFileStr("timeTest/image_list.txt", availableImageList);
     
   //Loading Model, Delegate, interpreter and graph  
   std::unique_ptr<tflite::FlatBufferModel> model = 
@@ -345,18 +346,9 @@ int dummyModelTime(bool modGraph, std::string modelName, std::vector<float>& out
   //std::cout << "Set input" << std::endl;
   float* input = interpreter->typed_input_tensor<float>(0);
   float* output = interpreter->typed_output_tensor<float>(0);
-  int xS = 224, yS = 224, zS = 3;
-  int sizebuff = xS*yS*zS;
-  std::vector<uint8_t>buffInt(sizebuff, 0);
 
-  auto path = "timeTest/" + availableImageList[0];
-  std::ifstream inFile(path, std::ios::in | std::ios::binary);
-  if (!inFile) throw "Failed to open image data " + path;
-  inFile.read(reinterpret_cast<char*>(buffInt.data()), sizebuff);
-  inFile.close();
-
-  for (int i = 0; i< sizebuff ;i++) {
-    auto val = buffInt[i];
+  for (int i = 0; i< input_size ;i++) {
+    auto val = inImage[i];
     input[i] = (val / 255.0 - 0.5) * 2.0;
   }
   auto start = std::chrono::steady_clock::now();
@@ -380,27 +372,43 @@ bool compareVector(int vectSize, std::vector<float>& vect1, std::vector<float>& 
 }
 
 void dummyModelsTest(){
+  srand(time(NULL));
+  std::vector<std::string> availableImageList;
+  int xS = 56, yS = 56, zS = 512;
+  int sizebuff = xS*yS*zS;
+  std::vector<uint8_t> buffInt(sizebuff, 0);
+  for(int i = 0; i<sizebuff; i++)
+    buffInt[i] = static_cast<uint8_t>(rand()%255);
+
+//  ReadFileStr("timeTest/image_list.txt", availableImageList);
+//  auto path = "timeTest/" + availableImageList[0];
+//  std::ifstream inFile(path, std::ios::in | std::ios::binary);
+//  if (!inFile) throw "Failed to open image data " + path;
+//  inFile.read(reinterpret_cast<char*>(buffInt.data()), sizebuff);
+//  inFile.close();
+
   std::vector<std::string> availableModelsList;
-  ReadFileStr("models/models_list.txt", availableModelsList);
-  int output_size = 224;
+  ReadFileStr("models/models_list_512.txt", availableModelsList);
+
+  int output_size = 56;
   for(std::string modelName:availableModelsList){
     output_size -= 2;
     LOG += "\n####################\nExecuting model:" + modelName + "\n";    
     std::cout << std::endl<< "####################" << std::endl<< "Executing model: " << modelName.c_str() << std::endl;
     std::vector<float> output_tf(output_size*output_size);
     std::vector<float> output_vulkan(output_size*output_size);
-    int Time1 = dummyModelTime(false, modelName, output_tf, output_size);
-    int Time2 = dummyModelTime(true, modelName, output_vulkan, output_size);
-    LOG += std::string("Time With TFLite: ")+
-      std::to_string(Time1)+
-      std::string(" ns\nTime With TFLite+vulkan: ")+
-      std::to_string(Time2)+
-      std::string(" ns\n");
+    int Time1 = dummyModelTime(false, modelName, buffInt, sizebuff, output_tf, output_size);
+    int Time2 = dummyModelTime(true, modelName, buffInt, sizebuff, output_vulkan, output_size);
+    LOG += std::string("")+
+      std::to_string(float(Time1)/10e6)+
+      std::string(" \t")+
+      std::to_string(float(Time2)/10e6)+
+      std::string(" \n");
     //std::cout << output_tf[i]-output_vulkan[i]<< std::endl;
-    if (compareVector(output_size, output_tf,output_vulkan))
-      LOG += "Both vectors are equal\n";
-    else
-      LOG += "BOTH  VECTORS ARE DIFFERENT\n";
+    //if (compareVector(output_size, output_tf,output_vulkan))
+    //  LOG += "Both vectors are equal\n";
+    //else
+    //  LOG += "BOTH  VECTORS ARE DIFFERENT\n";
 
   }
 }
